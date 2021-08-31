@@ -1,0 +1,7 @@
+exp_name: bert_slider
+trainer:
+  auto_select_gpus: true
+  gpus: 1
+data:
+  inner_batch_size: 16
+  batch_size: 2
