@@ -4,13 +4,14 @@ from typing import List
 import torch
 import torch.nn as nn
 
-from olsen.data.textblock import TextBlock
+from olsen.dataunit.textblock import TextBlock
+from olsen.util.datatypes import EncodingDict
 
 
 class AttnWrapper(nn.Module):
     def __init__(
             self,
-            model: nn.Sequential,
+            model: nn.Module,
             embed_dim: int,
             window_size: int,
             dilation_gap: int,
@@ -23,33 +24,21 @@ class AttnWrapper(nn.Module):
         self.dilation_gap = dilation_gap + 1
         self.overlap = self.window_size * self.dilation_gap
 
-    def forward(self, lines: List[TextBlock]):
-        main_size = [len(doc.lines) for doc in lines]
-        begin_size = [len(doc.begin) for doc in lines]
-        end_size = [len(doc.end) for doc in lines]
+    def forward(self, text: List[TextBlock]):
+        input_list = [[block.begin, block.main, block.end] for block in text]
+        flattened_list = list(itertools.chain.from_iterable(input_list))
+        input_encoding = EncodingDict.merge(flattened_list)
 
-        main_lines = [doc.lines for doc in lines]
-        begin_lines = [doc.begin for doc in lines]
-        end_lines = [doc.end for doc in lines]
+        size = [block.distribute for block in text]
+        all_size = [sum(block.distribute) for block in text]
 
-        main_lines = list(itertools.chain.from_iterable(main_lines))
-        begin_lines = list(itertools.chain.from_iterable(begin_lines))
-        end_lines = list(itertools.chain.from_iterable(end_lines))
+        output_encoding = self.model(input_encoding)
 
-        all_size = [len(main_lines), len(begin_lines), len(end_lines)]
-        all_lines = list(itertools.chain.from_iterable([main_lines, begin_lines, end_lines]))
-
-        all_encodings = self.model(all_lines)
-
-        main_encodings, begin_encodings, end_encodings = torch.split(all_encodings, all_size)
-
-        main_encodings_list = torch.split(main_encodings, main_size)
-        begin_encodings_list = torch.split(begin_encodings, begin_size)
-        end_encodings_list = torch.split(end_encodings, end_size)
+        input_by_item = torch.split(output_encoding, all_size)
+        output_list = [torch.split(input_by_item[i], size[i]) for i in range(len(size))]
 
         encodings = []
-        for main_encoding, begin_encoding, end_encoding in \
-                zip(main_encodings_list, begin_encodings_list, end_encodings_list):
+        for begin_encoding, main_encoding, end_encoding in output_list:
             key_list = []
             for i in range(-self.overlap, 0, self.dilation_gap):
                 encoding = torch.cat([begin_encoding[i:], main_encoding[:i]], dim=0)
@@ -57,11 +46,14 @@ class AttnWrapper(nn.Module):
             for i in range(self.dilation_gap, self.overlap + self.dilation_gap, self.dilation_gap):
                 encoding = torch.cat([main_encoding[i:], end_encoding[:i]], dim=0)
                 key_list.append(encoding)
-            key = torch.stack(key_list, dim=-2)
+            key = torch.stack(key_list, dim=1)
             query = main_encoding.unsqueeze(1)
-            attn = self.attention(query=query, key=key, value=key)
-            attn_encoding = attn.squeeze(-2)
+            attn = self.attention(query=query, key=key, value=key)[0]
+            attn_encoding = attn.squeeze(1)
             encoding = torch.cat([main_encoding, attn_encoding], dim=-1)
             encodings.append(encoding)
         final_encoding = torch.cat(encodings, dim=0)
         return final_encoding
+
+    def get_dimension(self):
+        return self.embed_dim * 2

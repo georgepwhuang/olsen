@@ -1,6 +1,6 @@
 /venv/
 /data/
 /models/
-/notebooks/
 /output/
 /.idea/
+/logs/

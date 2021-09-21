@@ -3,20 +3,22 @@ from typing import List
 
 from torch.utils.data import Dataset
 
-from olsen.data.labelblock import LabelBlock
-from olsen.data.textblock import TextBlock
+from olsen.dataunit.labelblock import LabelBlock
+from olsen.dataunit.textblock import TextBlock
+from olsen.module.tokenizer import SentenceTokenizer
 
 
 class DocumentClassificationDataset(Dataset):
     def __init__(
             self, filename: str, defined_labels: List[str], batch_size: int,
-            window_size: int, dilation_gap: int
+            window_size: int, dilation_gap: int, transformer: str
     ):
         super().__init__()
         self.filename = filename
         self.batch_size = batch_size
         self.overlap = int((window_size - 1) / 2.0) * (dilation_gap + 1)
         self.defined_labels = defined_labels
+        self.tokenizer = SentenceTokenizer(transformer)
         self.lines, self.labels = self.get_lines_labels()
 
     def get_lines_labels(self) -> (List[TextBlock], List[LabelBlock]):
@@ -27,29 +29,21 @@ class DocumentClassificationDataset(Dataset):
         with open(self.filename) as fp:
             for line in fp:
                 if bool(line.strip()):
-                    line, label = line.split("###")
-                    line = line.strip()
+                    text, label = line.split("###")
+                    text = text.strip()
                     label = label.strip()
-                    lines.append(line)
+                    lines.append(text)
                     labels.append(label)
                 else:
-                    lines_read = len(lines)
                     textblock, labelblock = self.create_block(lines, labels)
                     textblocks.extend(textblock)
                     labelblocks.extend(labelblock)
-                    lines_batched = sum([len(block.lines) for block in textblock])
-                    assert lines_read == lines_batched, \
-                        f"Lines read ({lines_read}) and lines batched ({lines_batched})do not match"
                     lines = []
                     labels = []
         if len(lines) > 0 and len(labels) > 0:
-            lines_read = len(lines)
             textblock, labelblock = self.create_block(lines, labels)
             textblocks.extend(textblock)
             labelblocks.extend(labelblock)
-            lines_batched = sum([len(block.lines) for block in textblock])
-            assert lines_read == lines_batched, \
-                f"Lines read ({lines_read}) and lines batched ({lines_batched})do not match"
         return textblocks, labelblocks
 
     def create_block(self, lines: List[str], labels: List[str]) -> (List[TextBlock], List[LabelBlock]):
@@ -66,8 +60,9 @@ class DocumentClassificationDataset(Dataset):
         label_batch = labels[0:offset]
         begin = []
         end = lines[offset:offset + self.overlap]
-        textblock.append(TextBlock(lines=line_batch, begin=begin, end=end, overlap=self.overlap))
-        labelblock.append(LabelBlock.from_labels(labels=label_batch, label_map=self.defined_labels))
+        textblock.append(TextBlock(lines=line_batch, begin=begin, end=end, overlap=self.overlap,
+                                   tokenizer=self.tokenizer))
+        labelblock.append(LabelBlock(labels=label_batch, label_map=self.defined_labels))
         for idx in range(offset, len(lines), self.batch_size):
             line_batch = lines[idx: idx + self.batch_size]
             label_batch = labels[idx: idx + self.batch_size]
@@ -76,11 +71,13 @@ class DocumentClassificationDataset(Dataset):
                 end = lines[idx + self.batch_size: len(lines)]
             else:
                 end = lines[idx + self.batch_size: idx + self.batch_size + self.overlap]
-            textblock.append(TextBlock(lines=line_batch, begin=begin, end=end, overlap=self.overlap))
-            labelblock.append(LabelBlock.from_labels(labels=label_batch, label_map=self.defined_labels))
+            textblock.append(TextBlock(lines=line_batch, begin=begin, end=end, overlap=self.overlap,
+                                       tokenizer=self.tokenizer))
+            labelblock.append(LabelBlock(labels=label_batch, label_map=self.defined_labels))
         return textblock, labelblock
 
     def __len__(self):
+        assert len(self.lines) == len(self.labels)
         return len(self.lines)
 
     def __getitem__(self, idx) -> (TextBlock, LabelBlock):
@@ -89,38 +86,19 @@ class DocumentClassificationDataset(Dataset):
 
 class DocumentInferenceDataset(Dataset):
     def __init__(
-            self, filename: str, batch_size: int = 16,
-            window_size: int = 3, dilation_gap: int = 0
+            self, filename: str, batch_size: int, window_size: int, dilation_gap: int, transformer: str
     ):
         super().__init__()
         self.filename = filename
         self.batch_size = batch_size
         self.overlap = int((window_size - 1) / 2.0) * (dilation_gap + 1)
+        self.tokenizer = SentenceTokenizer(transformer)
         self.lines = self.get_lines()
 
     def get_lines(self) -> List[TextBlock]:
-        lines: List[str] = []
-        textblock: List[TextBlock] = []
         with open(self.filename) as fp:
-            for line in fp:
-                if bool(line.strip()):
-                    line = line.strip()
-                    lines.append(line)
-                else:
-                    lines_read = len(lines)
-                    file_batch = self.create_block(lines)
-                    textblock.extend(file_batch)
-                    lines_batched = sum([len(file.lines) for file in file_batch])
-                    assert lines_read == lines_batched, \
-                        f"Lines read ({lines_read}) and lines batched ({lines_batched})do not match"
-                    lines = []
-        if len(lines) > 0:
-            lines_read = len(lines)
-            file_batch = self.create_block(lines)
-            textblock.extend(file_batch)
-            lines_batched = sum([len(file.lines) for file in file_batch])
-            assert lines_read == lines_batched, \
-                f"Lines read ({lines_read}) and lines batched ({lines_batched})do not match"
+            lines = [line.strip() for line in fp if bool(line.strip())]
+        textblock = self.create_block(lines)
         return textblock
 
     def create_block(self, lines: List[str]) -> List[TextBlock]:
@@ -135,7 +113,8 @@ class DocumentInferenceDataset(Dataset):
         line_batch = lines[0:offset]
         begin = []
         end = lines[offset:offset + self.overlap]
-        textblock.append(TextBlock(lines=line_batch, begin=begin, end=end, overlap=self.overlap))
+        textblock.append(TextBlock(lines=line_batch, begin=begin, end=end, overlap=self.overlap,
+                                   tokenizer=self.tokenizer))
         for idx in range(offset, len(lines), self.batch_size):
             line_batch = lines[idx: idx + self.batch_size]
             begin = lines[idx - self.overlap:idx]
@@ -143,11 +122,12 @@ class DocumentInferenceDataset(Dataset):
                 end = lines[idx + self.batch_size: len(lines)]
             else:
                 end = lines[idx + self.batch_size: idx + self.batch_size + self.overlap]
-            textblock.append(TextBlock(lines=line_batch, begin=begin, end=end, overlap=self.overlap))
+            textblock.append(TextBlock(lines=line_batch, begin=begin, end=end, overlap=self.overlap,
+                                       tokenizer=self.tokenizer))
         return textblock
 
     def __len__(self):
         return len(self.lines)
 
-    def __getitem__(self, idx) -> (TextBlock):
-        return (self.lines[idx])
+    def __getitem__(self, idx) -> TextBlock:
+        return self.lines[idx]

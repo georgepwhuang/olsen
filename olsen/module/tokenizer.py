@@ -12,10 +12,7 @@ class SentenceTokenizer(nn.Module):
     ):
         super(SentenceTokenizer, self).__init__()
         self.transformer = transformer
-        self.tokenizer = AutoTokenizer.from_pretrained(self.transformer,
-                                                       use_fast=False,
-                                                       model_max_length=512,
-                                                       do_basic_tokenize=False)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.transformer)
         self.dt = {
             self.tokenizer.bos_token: "bos",
             self.tokenizer.eos_token: "eos",
@@ -26,8 +23,11 @@ class SentenceTokenizer(nn.Module):
         }
 
     def forward(self, lines: List[str]) -> torch.Tensor:
+        new_lines = []
         for line in lines:
+            new_line = line
             for key, value in self.dt.items():
                 if bool(key):
-                    line = line.replace(key, value)
-        return self.tokenizer(lines, padding=True, truncation=True, return_tensors="pt")
+                    new_line = new_line.replace(key, value)
+            new_lines.append(new_line)
+        return self.tokenizer(new_lines, padding="max_length", truncation=True, max_length=128, return_tensors="pt")

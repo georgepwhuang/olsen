@@ -16,7 +16,7 @@ class Classifier(nn.Module):
         self.dropout_prob = dropout_prob
         self.num_classes = num_classes
         self.dropout = nn.Dropout(self.dropout_prob)
-        self.classification_layer = nn.Linear(self.encoding_dim, self.num_classes)
+        self.classification_layer = nn.Linear(self.encoding_dim, self.num_classes, bias=True)
 
     def forward(self, inputs: torch.Tensor) -> Dict[str, Any]:
         encoding = self.dropout(inputs)

@@ -1,9 +1,9 @@
 from setuptools import setup
 
 setup(
-	name='nelsen',
+	name='olsen',
 	version='0.0.1',
-	packages=['nelsen'],
+	packages=['olsen'],
 	url='',
 	license='',
 	author='georgehuang',

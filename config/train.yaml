@@ -1,16 +1,20 @@
 exp_name: bert_slider
 trainer:
   auto_select_gpus: True
-  auto_lr_find: True
   gpus: 1
-  max_epochs: 1
+  max_epochs: 5
+  gradient_clip_val: 5.0
+  reload_dataloaders_every_n_epochs: 1
 model:
   transformer: roberta-base
-  embedding_method: attn_pool
-  num_classes: 23
+  embedding_method: attn_pool_cls
   learning_rate: 5e-5
+  window_size: 5
+  dilation_gap: 0
 data:
   inner_batch_size: 16
   batch_size: 2
-  window_size: 5
-  dilation_gap: 0
+checkpoint:
+  monitor: val_f1_macro
+  mode: max
+  every_n_epochs: 1
