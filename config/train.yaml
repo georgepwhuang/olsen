@@ -1,7 +1,7 @@
-exp_name: bert_slider
+exp_name: bert_slider_supervised_uda_root
 trainer:
   auto_select_gpus: True
-  gpus: 1
+  gpus: [4]
   max_epochs: 5
   gradient_clip_val: 5.0
   reload_dataloaders_every_n_epochs: 1
@@ -11,6 +11,7 @@ model:
   learning_rate: 5e-5
   window_size: 5
   dilation_gap: 0
+  tsa_schedule: root_schedule
 data:
   inner_batch_size: 16
   batch_size: 2

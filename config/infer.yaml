@@ -1,4 +1,4 @@
-exp_name: bert_slider
+exp_name: bert_slider_tsa
 trainer:
   auto_select_gpus: true
   gpus: 1

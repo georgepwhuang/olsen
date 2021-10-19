@@ -37,11 +37,14 @@ class BertSlider(pl.LightningModule):
         self.classifier = Classifier(encoding_dim=self.wrapper.get_dimension(),
                                      num_classes=num_classes)
         self.model = nn.Sequential(self.wrapper, self.activation, self.classifier)
-        self.cross_entropy_loss = nn.CrossEntropyLoss()
         self.softmax = nn.Softmax(dim=1)
-        self.train_metrics = ClassificationMetrics(self.num_classes, "train")
-        self.val_metrics = ClassificationMetrics(self.num_classes, "val")
-        self.test_metrics = ClassificationMetrics(self.num_classes, "test")
+        self.cross_entropy_loss = nn.CrossEntropyLoss()
+
+    def setup(self, stage=None) -> None:
+        if stage == 'fit':
+            self.val_metrics = ClassificationMetrics(self.num_classes, "val")
+        if stage == 'test':
+            self.test_metrics = ClassificationMetrics(self.num_classes, "test")
 
     def forward(self, x):
         return self.model(x)
@@ -49,16 +52,15 @@ class BertSlider(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         x, y = list(zip(*batch))
         logits = self.forward(x)
-        label_tensor = self.label2tensor(y).type_as(logits).long()
+        label_tensor = self.concat_label_tensor(y).type_as(logits).long()
         loss = self.cross_entropy_loss(logits, label_tensor)
-        self.train_metrics(logits, label_tensor)
         self.log("train_loss", loss)
         return loss
 
     def validation_step(self, val_batch, batch_idx):
         x, y = list(zip(*val_batch))
         logits = self.forward(x)
-        label_tensor = self.label2tensor(y).type_as(logits).long()
+        label_tensor = self.concat_label_tensor(y).type_as(logits).long()
         loss = self.cross_entropy_loss(logits, label_tensor)
         self.val_metrics(logits, label_tensor)
         self.log("val_loss", loss)
@@ -70,7 +72,7 @@ class BertSlider(pl.LightningModule):
     def test_step(self, test_batch, batch_idx):
         x, y = list(zip(*test_batch))
         logits = self.forward(x)
-        label_tensor = self.label2tensor(y).type_as(logits).long()
+        label_tensor = self.concat_label_tensor(y).type_as(logits).long()
         loss = self.cross_entropy_loss(logits, label_tensor)
         self.test_metrics(logits, label_tensor)
         self.log("test_loss", loss)
@@ -82,15 +84,15 @@ class BertSlider(pl.LightningModule):
     def predict_step(self, batch, batch_idx: int, dataloader_idx: int = None):
         logits = self.forward(batch)
         normalized_probs = self.softmax(logits)
-        _, pred_indices = torch.topk(normalized_probs, k=1, dim=1)
-        pred_indices = pred_indices.squeeze(1).tolist()
+        _, pred_indices = torch.max(normalized_probs, dim=1)
+        pred_indices = pred_indices.tolist()
         labels = LabelBlock.to_labels(pred_indices, self.labels)
         return labels
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
 
-    def label2tensor(self, labels: List[LabelBlock]) -> torch.Tensor:
+    def concat_label_tensor(self, labels: List[LabelBlock]) -> torch.Tensor:
         return torch.cat([label.idxs for label in labels])
 
     def log_scalars(self, metric: ClassificationMetrics):

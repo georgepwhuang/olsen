@@ -12,11 +12,11 @@ class TextBlock:
         begin_ext.extend(begin)
         end_ext = end
         end_ext.extend([""] * (overlap - len(end)))
+        assert len(begin_ext) == overlap, f"Begin length is {len(begin_ext)} != overlap"
+        assert len(end_ext) == overlap, f"End length is {len(end_ext)} != overlap"
         self.begin = tokenizer(begin_ext)
         self.main = tokenizer(lines)
         self.end = tokenizer(end_ext)
-        assert len(begin_ext) == overlap, f"Begin length is {len(begin_ext)} != overlap"
-        assert len(end_ext) == overlap, f"End length is {len(end_ext)} != overlap"
         self.distribute = [len(begin_ext), len(lines), len(end_ext)]
 
     def to(self, device: torch.device):
