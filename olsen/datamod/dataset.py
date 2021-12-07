@@ -1,5 +1,6 @@
 import random
-from typing import List
+from abc import ABC, abstractmethod
+from typing import List, Sized
 
 from torch.utils.data import Dataset
 
@@ -8,7 +9,13 @@ from olsen.dataunit.textblock import TextBlock
 from olsen.module.tokenizer import SentenceTokenizer
 
 
-class DocumentClassificationDataset(Dataset):
+class SizedDataset(Dataset, ABC, Sized):
+    @abstractmethod
+    def __len__(self):
+        pass
+
+
+class DocumentClassificationDataset(SizedDataset):
     def __init__(
             self, filename: str, defined_labels: List[str], batch_size: int,
             window_size: int, dilation_gap: int, transformer: str
@@ -83,7 +90,8 @@ class DocumentClassificationDataset(Dataset):
     def __getitem__(self, idx) -> (TextBlock, LabelBlock):
         return self.lines[idx], self.labels[idx]
 
-class AugmentedDocumentClassificationDataset(Dataset):
+
+class AugmentedDocumentClassificationDataset(SizedDataset):
     def __init__(
             self, filename: str, defined_labels: List[str], batch_size: int,
             window_size: int, dilation_gap: int, transformer: str
@@ -181,7 +189,7 @@ class AugmentedDocumentClassificationDataset(Dataset):
         return self.lines[idx], self.augs[idx], self.labels[idx]
 
 
-class DocumentInferenceDataset(Dataset):
+class DocumentInferenceDataset(SizedDataset):
     def __init__(
             self, filename: str, batch_size: int, window_size: int, dilation_gap: int, transformer: str
     ):
@@ -230,7 +238,7 @@ class DocumentInferenceDataset(Dataset):
         return self.lines[idx]
 
 
-class UnlabelledDocumentDataset(Dataset):
+class UnlabelledDocumentDataset(SizedDataset):
     def __init__(
             self, filename: str, batch_size: int,
             window_size: int, dilation_gap: int, transformer: str

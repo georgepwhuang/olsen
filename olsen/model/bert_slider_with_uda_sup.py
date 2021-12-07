@@ -1,6 +1,8 @@
 from typing import List
-import torch.nn as nn
+
 import torch
+import torch.nn as nn
+
 from olsen.model.bert_slider import BertSlider
 from olsen.util.uda_util import get_tsa_thresh
 
@@ -41,34 +43,39 @@ class BertSliderWithSupervisedUDA(BertSlider):
 
     def training_step(self, batch, batch_idx):
         text, aug, label = list(zip(*batch))
-        logits = self.model(text)
+        merged_text = text + aug
+        logits = self.model(merged_text)
+        length = logits.size()[0]
+        assert length % 2 == 0, "Merged tensor error"
+        assert length == 2 * sum([block.distribute[1] for block in text])
+        original_tensor, augmented_tensor = torch.split(logits, int(length / 2))
         label_tensor = self.concat_label_tensor(label).type_as(logits).long()
-        sup_loss = self.sup_loss_funct(logits, label_tensor)
+        sup_loss = self.sup_loss_funct(original_tensor, label_tensor)
 
-        #training signal annealing
+        # training signal annealing
         tsa_thresh = get_tsa_thresh(self.tsa_schedule, self.global_step, self.total_steps, self.num_classes)
         larger_than_threshold = torch.exp(-sup_loss) > tsa_thresh
         loss_mask = torch.ones_like(label_tensor, dtype=torch.float32) * (1 - larger_than_threshold.type(torch.float32))
         sup_loss = torch.sum(sup_loss * loss_mask, dim=-1) / torch.max(torch.sum(loss_mask, dim=-1), torch.tensor(1.))
 
-        original_prob = self.softmax(logits)
+        original_prob = self.softmax(original_tensor)
 
         # confidence-based masking
         unsup_loss_mask = torch.max(original_prob, dim=-1)[0] > self.uda_confidence_thresh
         unsup_loss_mask = unsup_loss_mask.type(torch.float32)
 
-        augmented_tensor = self.model(aug)
         # sharpening predictions
         augmented_prob = self.log_softmax(augmented_tensor / self.uda_softmax_temp)
 
         unsup_loss = self.unsup_loss_funct(augmented_prob, original_prob)
         unsup_loss = torch.sum(unsup_loss, dim=-1)
-        unsup_loss = torch.sum(unsup_loss * unsup_loss_mask, dim=-1) / torch.max(torch.sum(unsup_loss_mask, dim=-1), torch.tensor(1.))
+        unsup_loss = torch.sum(unsup_loss * unsup_loss_mask, dim=-1) / torch.max(torch.sum(unsup_loss_mask, dim=-1),
+                                                                                 torch.tensor(1.))
 
         total_loss = sup_loss + self.unsup_coeff * unsup_loss
 
         self.log("train_cross_entropy_loss", sup_loss)
         self.log("train_consistency_loss", unsup_loss)
-        self.log("train_total_loss", total_loss)
+        self.log("train_loss", total_loss)
 
         return total_loss

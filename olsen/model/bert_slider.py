@@ -1,18 +1,17 @@
 from typing import List
 
+import matplotlib.pyplot as plt
 import pytorch_lightning as pl
+import seaborn as sb
 import torch
 import torch.nn as nn
 
-import matplotlib.pyplot as plt
-import seaborn as sb
-
-from olsen.metrics.metrics import ClassificationMetrics
-from olsen.module.classifier import Classifier
 from olsen.dataunit.labelblock import LabelBlock
+from olsen.metrics.metrics import ClassificationMetrics
+from olsen.module.activation import Activation
+from olsen.module.classifier import Classifier
 from olsen.module.transformer import BertSentenceEncoder
 from olsen.module.wrapper import AttnWrapper
-from olsen.module.activation import Activation
 
 
 class BertSlider(pl.LightningModule):
@@ -97,17 +96,15 @@ class BertSlider(pl.LightningModule):
 
     def log_scalars(self, metric: ClassificationMetrics):
         self.log(f"{metric.mode}_precision_macro", metric.macro_pc)
-        self.log(f"{metric.mode}_precision_micro", metric.micro_pc)
         self.log(f"{metric.mode}_precision_weighted", metric.weigh_pc)
 
         self.log(f"{metric.mode}_recall_macro", metric.macro_rc)
-        self.log(f"{metric.mode}_recall_micro", metric.micro_rc)
         self.log(f"{metric.mode}_recall_weighted", metric.weigh_rc)
 
         self.log(f"{metric.mode}_f1_macro", metric.macro_f1)
-        self.log(f"{metric.mode}_f1_micro", metric.micro_f1)
         self.log(f"{metric.mode}_f1_weighted", metric.weigh_f1)
 
+        self.log(f"{metric.mode}_accuracy", metric.weigh_f1)
         self.log(f"{metric.mode}_mcc", metric.mcc)
 
     def log_nonscalars(self, metric: ClassificationMetrics):
@@ -127,4 +124,3 @@ class BertSlider(pl.LightningModule):
         categ_f1 = metric.categ_pc.compute().cpu().tolist()
         f1_map = dict(zip(self.labels, categ_f1))
         self.logger.experiment.add_scalars(f"{metric.mode}_f1_categ", f1_map, global_step=self.current_epoch)
-

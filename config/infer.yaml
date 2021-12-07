@@ -1,7 +1,7 @@
-exp_name: bert_slider_tsa
+exp_name: bert_slider_sda_log
 trainer:
   auto_select_gpus: true
-  gpus: 1
+  gpus: [7]
 data:
   inner_batch_size: 16
   batch_size: 2

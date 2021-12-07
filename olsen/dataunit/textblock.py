@@ -1,6 +1,7 @@
 from typing import List
-from torch import nn
+
 import torch
+from torch import nn
 
 
 class TextBlock:

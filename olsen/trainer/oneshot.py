@@ -1,14 +1,17 @@
-from pytorch_lightning.callbacks import ModelCheckpoint
-from pytorch_lightning.utilities.cli import LightningArgumentParser
-from olsen.datamod.datamodule import DocumentClassificationData
-from olsen.model.bert_slider_with_tsa import BertSliderWithTSA
-from pytorch_lightning import Trainer
-import olsen.constants as consts
+import itertools
+import json
 import os
 import warnings
-import itertools
+
 import pandas as pd
-import json
+from pytorch_lightning import Trainer
+from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.utilities.cli import LightningArgumentParser
+
+import olsen.constants as consts
+from olsen.datamod.datamodule import DocumentClassificationData
+from olsen.model.bert_slider_with_tsa import BertSliderWithTSA
+
 warnings.filterwarnings("ignore", category=UserWarning)
 
 TRAIN_PATH = consts.DATASET_DIR.joinpath("sect_label")
@@ -50,10 +53,12 @@ checkpoint_callback = ModelCheckpoint(**vars(args.checkpoint))
 trainer = Trainer.from_argparse_args(args.trainer, callbacks=[checkpoint_callback])
 trainer.fit(model, data)
 test_metrics = trainer.test(model, data)
-with open(str(OUTPUT_PATH)+".json", "w") as outfile:
+with open(str(OUTPUT_PATH) + ".json", "w") as outfile:
     json.dump(test_metrics[0], outfile)
 result = trainer.predict(model, data)
 flattened_result = []
+if not os.path.exists(OUTPUT_PATH):
+    os.makedirs(OUTPUT_PATH)
 for i in range(len(PRED_FILES)):
     labels = list(itertools.chain.from_iterable(result[i]))
     lines = []
@@ -66,4 +71,3 @@ for i in range(len(PRED_FILES)):
     df["Lines"] = lines
     df["Label"] = labels
     df.to_csv(os.path.join(OUTPUT_PATH, os.path.splitext(os.path.basename(PRED_FILES[i]))[0] + ".csv"), index=False)
-

@@ -1,13 +1,15 @@
 from typing import List
-import torch.nn as nn
+
 import torch
+import torch.nn as nn
+
 from olsen.model.bert_slider import BertSlider
 from olsen.util.uda_util import get_tsa_thresh
 
 
 class BertSliderWithUDA(BertSlider):
     def __init__(self, transformer: str, embedding_method: str,
-                 window_size: int, dilation_gap: int, num_classes: int, learning_rate: float,
+                 window_size: int, dilation_gap: int, num_classes: int, learning_rate: float, period: int,
                  labels: List[str] = None, unsup_coeff: int = 1, tsa_schedule: str = "exp_schedule",
                  uda_confidence_thresh: float = 0.8, uda_softmax_temp: float = 0.4):
         super().__init__(transformer, embedding_method, window_size, dilation_gap, num_classes, learning_rate, labels)
@@ -18,7 +20,9 @@ class BertSliderWithUDA(BertSlider):
         self.tsa_schedule = tsa_schedule
         self.uda_confidence_thresh = uda_confidence_thresh
         self.uda_softmax_temp = uda_softmax_temp
+        self.period = period
         self.save_hyperparameters()
+        self.automatic_optimization = False
 
     def setup(self, stage=None) -> None:
         super().setup(stage)
@@ -40,41 +44,44 @@ class BertSliderWithUDA(BertSlider):
                 self.total_steps = (batches // effective_accum) * self.trainer.max_epochs
 
     def training_step(self, batch, batch_idx):
-        labelled = batch['sup']
-        unlabelled = batch['unsup']
+        opt = self.optimizers()
+        if batch_idx % self.period == 0:
+            text, label = list(zip(*batch))
+            logits = self.model(text)
+            label_tensor = self.concat_label_tensor(label).type_as(logits).long()
+            sup_loss = self.sup_loss_funct(logits, label_tensor)
 
-        text, label = list(zip(*labelled))
-        logits = self.model(text)
-        label_tensor = self.concat_label_tensor(label).type_as(logits).long()
-        sup_loss = self.sup_loss_funct(logits, label_tensor)
+            # training signal annealing
+            tsa_thresh = get_tsa_thresh(self.tsa_schedule, self.global_step, self.total_steps, self.num_classes)
+            larger_than_threshold = torch.exp(-sup_loss) > tsa_thresh
+            loss_mask = torch.ones_like(label_tensor, dtype=torch.float32) * (
+                        1 - larger_than_threshold.type(torch.float32))
+            sup_loss = torch.sum(sup_loss * loss_mask, dim=-1) / torch.max(torch.sum(loss_mask, dim=-1),
+                                                                           torch.tensor(1.))
+            self.log("train_cross_entropy_loss", sup_loss)
+            self.manual_backward(sup_loss)
 
-        #training signal annealing
-        tsa_thresh = get_tsa_thresh(self.tsa_schedule, self.global_step, self.total_steps, self.num_classes)
-        larger_than_threshold = torch.exp(-sup_loss) > tsa_thresh
-        loss_mask = torch.ones_like(label_tensor, dtype=torch.float32) * (1 - larger_than_threshold.type(torch.float32))
-        sup_loss = torch.sum(sup_loss * loss_mask, dim=-1) / torch.max(torch.sum(loss_mask, dim=-1), torch.tensor(1.))
+        else:
+            original, augmented = list(zip(*batch))
+            with torch.no_grad:
+                original_tensor = self.model(original)
+                original_prob = self.softmax(original_tensor)
 
-        original, augmented = list(zip(*unlabelled))
-        with torch.no_grad:
-            original_tensor = self.model(original)
-            original_prob = self.softmax(original_tensor)
+                # confidence-based masking
+                unsup_loss_mask = torch.max(original_prob, dim=-1)[0] > self.uda_confidence_thresh
+                unsup_loss_mask = unsup_loss_mask.type(torch.float32)
 
-            # confidence-based masking
-            unsup_loss_mask = torch.max(original_prob, dim=-1)[0] > self.uda_confidence_thresh
-            unsup_loss_mask = unsup_loss_mask.type(torch.float32)
+            augmented_tensor = self.model(augmented)
+            # sharpening predictions
+            augmented_prob = self.log_softmax(augmented_tensor / self.uda_softmax_temp)
 
-        augmented_tensor = self.model(augmented)
-        # sharpening predictions
-        augmented_prob = self.log_softmax(augmented_tensor / self.uda_softmax_temp)
+            unsup_loss = self.unsup_loss_funct(augmented_prob, original_prob)
+            unsup_loss = torch.sum(unsup_loss, dim=-1)
+            unsup_loss = torch.sum(unsup_loss * unsup_loss_mask, dim=-1) / torch.max(torch.sum(unsup_loss_mask, dim=-1),
+                                                                                     torch.tensor(1.))
+            self.log("train_consistency_loss", unsup_loss)
+            self.manual_backward(unsup_loss * self.unsup_coeff / (self.period - 1))
 
-        unsup_loss = self.unsup_loss_funct(augmented_prob, original_prob)
-        unsup_loss = torch.sum(unsup_loss, dim=-1)
-        unsup_loss = torch.sum(unsup_loss * unsup_loss_mask, dim=-1) / torch.max(torch.sum(unsup_loss_mask, dim=-1), torch.tensor(1.))
-
-        total_loss = sup_loss + self.unsup_coeff * unsup_loss
-
-        self.log("train_sup_loss", sup_loss)
-        self.log("train_unsup_loss", unsup_loss)
-        self.log("train_total_loss", total_loss)
-
-        return total_loss
+        if (batch_idx + 1) % self.period == 0:
+            opt.step()
+            opt.zero_grad()

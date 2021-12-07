@@ -1,20 +1,21 @@
-exp_name: bert_slider_supervised_uda_root
+exp_name: bert_slider_sda_exp
 trainer:
   auto_select_gpus: True
-  gpus: [4]
+  gpus: [3]
   max_epochs: 5
   gradient_clip_val: 5.0
   reload_dataloaders_every_n_epochs: 1
+  accumulate_grad_batches: 2
 model:
   transformer: roberta-base
   embedding_method: attn_pool_cls
-  learning_rate: 5e-5
+  learning_rate: 3e-5
   window_size: 5
   dilation_gap: 0
-  tsa_schedule: root_schedule
+  tsa_schedule: exp_schedule
 data:
   inner_batch_size: 16
-  batch_size: 2
+  batch_size: 1
 checkpoint:
   monitor: val_f1_macro
   mode: max

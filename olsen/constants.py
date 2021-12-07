@@ -13,6 +13,7 @@ CONFIG_DIR = ROOT_DIR.joinpath("config")
 LOG_DIR = ROOT_DIR.joinpath("logs")
 MODEL_DIR = ROOT_DIR.joinpath("models")
 OUTPUT_DIR = ROOT_DIR.joinpath("output")
+BIN_DIR = ROOT_DIR.joinpath("bin")
 
 SECT_LABELS = ['address', 'affiliation', 'author', 'bodyText', 'category', 'construct', 'copyright', 'email',
                'equation', 'figure', 'figureCaption', 'footnote', 'keyword', 'listItem', 'note', 'page', 'reference',

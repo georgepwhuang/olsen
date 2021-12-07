@@ -2,6 +2,7 @@ from typing import Optional, List
 
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
+
 from olsen.datamod.dataset import DocumentClassificationDataset, DocumentInferenceDataset, UnlabelledDocumentDataset, \
     AugmentedDocumentClassificationDataset
 
@@ -78,7 +79,6 @@ class DocumentClassificationData(pl.LightningDataModule):
                 in self.pred_datasets]
 
 
-
 class DocumentClassificationDataWithSupervisedUDA(DocumentClassificationData):
     def __init__(
             self,
@@ -127,6 +127,7 @@ class DocumentClassificationDataWithSupervisedUDA(DocumentClassificationData):
                                                    transformer=self.transformer)
                 datasets.append(dataset)
             self.pred_datasets = datasets
+
 
 class DocumentClassificationDataWithUDA(DocumentClassificationData):
     def __init__(self,

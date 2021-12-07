@@ -48,7 +48,8 @@ class AttnWrapper(nn.Module):
                 key_list.append(encoding)
             key = torch.stack(key_list, dim=1)
             query = main_encoding.unsqueeze(1)
-            attn = self.attention(query=query, key=key, value=key)[0]
+            _, attn_weight = self.attention(query=query, key=key, value=key)
+            attn = torch.bmm(attn_weight, key)
             attn_encoding = attn.squeeze(1)
             encoding = torch.cat([main_encoding, attn_encoding], dim=-1)
             encodings.append(encoding)

@@ -1,10 +1,12 @@
+import json
+
+from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.utilities.cli import LightningArgumentParser
+
+import olsen.constants as consts
 from olsen.datamod.datamodule import DocumentClassificationData
 from olsen.model.bert_slider import BertSlider
-from pytorch_lightning import Trainer
-import olsen.constants as consts
-import json
 
 TRAIN_PATH = consts.DATASET_DIR.joinpath("sect_label")
 CONFIG_PATH = consts.CONFIG_DIR.joinpath("train.yaml")
@@ -41,5 +43,5 @@ checkpoint_callback = ModelCheckpoint(**vars(args.checkpoint))
 trainer = Trainer.from_argparse_args(args.trainer, callbacks=[checkpoint_callback])
 trainer.fit(model, data)
 test_metrics = trainer.test(model, data)
-with open(str(OUTPUT_PATH)+".json", "w") as outfile:
+with open(str(OUTPUT_PATH) + ".json", "w") as outfile:
     json.dump(test_metrics[0], outfile)

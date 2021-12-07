@@ -1,4 +1,7 @@
+import itertools
 import os
+
+import pandas as pd
 from pytorch_lightning import Trainer
 from pytorch_lightning.utilities.cli import LightningArgumentParser
 
@@ -6,8 +9,7 @@ import olsen.constants as consts
 from olsen.datamod.datamodule import DocumentClassificationData
 from olsen.model.bert_slider import BertSlider
 
-import itertools
-import pandas as pd
+warnings.filterwarnings("ignore", category=UserWarning)
 
 INFER_PATH = consts.DATASET_DIR.joinpath("anthology")
 CONFIG_PATH = consts.CONFIG_DIR.joinpath("infer.yaml")
@@ -29,7 +31,7 @@ args = parser.parse_args(_skip_check=True)
 
 OUTPUT_PATH = consts.OUTPUT_DIR.joinpath(args.exp_name)
 
-model = BertSlider.load_from_checkpoint(checkpoint_path=consts.MODEL_DIR.joinpath(args.exp_name+".ckpt"))
+model = BertSlider.load_from_checkpoint(checkpoint_path=consts.MODEL_DIR.joinpath(args.exp_name + ".ckpt"))
 
 model_args = model.hparams
 dict_args = vars(args.data)
@@ -41,6 +43,8 @@ data = DocumentClassificationData(**dict_args)
 trainer = Trainer.from_argparse_args(args.trainer)
 result = trainer.predict(model, data)
 flattened_result = []
+if not os.path.exists(OUTPUT_PATH):
+    os.makedirs(OUTPUT_PATH)
 for i in range(len(PRED_FILES)):
     labels = list(itertools.chain.from_iterable(result[i]))
     lines = []
@@ -53,4 +57,3 @@ for i in range(len(PRED_FILES)):
     df["Lines"] = lines
     df["Label"] = labels
     df.to_csv(os.path.join(OUTPUT_PATH, os.path.splitext(os.path.basename(PRED_FILES[i]))[0] + ".csv"), index=False)
-

@@ -39,7 +39,7 @@ class BertSentenceEncoder(nn.Module):
             sentence_encoding = torch.max(output, dim=1)
         elif self.embedding_method == "attn_pool_cls":
             attention_mask = inputs.attention_mask
-            query = output[:, 0]
+            query = output[:, 0].unsqueeze(1)
             key = output
             attn, _ = self.attention(query=query, key=key, value=key, key_padding_mask=attention_mask)
             sentence_encoding = attn.squeeze(1)

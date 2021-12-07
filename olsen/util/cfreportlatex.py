@@ -5,11 +5,13 @@ Original: https://gist.github.com/julienr/6b9b9a03bd8224db7b4f
 Modified to work with Python 3 and classification report averages
 """
 
-import sys
 import collections
+import sys
+
 
 def parse_and_convert_to_latex(clfreport):
     return report_to_latex_table(parse_classification_report(clfreport))
+
 
 def parse_classification_report(clfreport):
     """
@@ -55,6 +57,7 @@ def parse_classification_report(clfreport):
 
     return data
 
+
 def report_to_latex_table(data):
     out = ""
     out += "\\begin{table}\n"
@@ -73,6 +76,7 @@ def report_to_latex_table(data):
     out += "\\label{table:classification:report}\n"
     out += "\\end{table}"
     return out
+
 
 if __name__ == '__main__':
     with open(sys.argv[1]) as f:

@@ -1,7 +1,8 @@
 from collections import UserDict
-from transformers.tokenization_utils_base import BatchEncoding
 from typing import List
+
 import torch
+from transformers.tokenization_utils_base import BatchEncoding
 
 
 class EncodingDict(UserDict):
@@ -22,4 +23,3 @@ class EncodingDict(UserDict):
         attention_mask = torch.cat(attention_mask, dim=0)
         dt = {"input_ids": input_ids, "attention_mask": attention_mask}
         return EncodingDict(dt)
-
