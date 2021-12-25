@@ -1,22 +1,24 @@
-exp_name: bert_slider_sda_exp
+exp_name: bert_slider_uda
 trainer:
-  auto_select_gpus: True
-  gpus: [3]
+  gpus: [8, 9]
   max_epochs: 5
-  gradient_clip_val: 5.0
-  reload_dataloaders_every_n_epochs: 1
-  accumulate_grad_batches: 2
+  replace_sampler_ddp: False
 model:
   transformer: roberta-base
   embedding_method: attn_pool_cls
   learning_rate: 3e-5
   window_size: 5
   dilation_gap: 0
-  tsa_schedule: exp_schedule
+  tsa_schedule: log_schedule
 data:
   inner_batch_size: 16
   batch_size: 1
+  ssl_training_mode: overflow
+  data_ratio: [1, 7]
 checkpoint:
   monitor: val_f1_macro
   mode: max
   every_n_epochs: 1
+strategy:
+  stage: 2
+  offload_optimizer: True

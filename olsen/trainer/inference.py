@@ -1,5 +1,7 @@
 import itertools
 import os
+import warnings
+import json
 
 import pandas as pd
 from pytorch_lightning import Trainer
@@ -41,6 +43,9 @@ dict_args["transformer"] = model_args["transformer"]
 dict_args["labels"] = model_args["labels"]
 data = DocumentClassificationData(**dict_args)
 trainer = Trainer.from_argparse_args(args.trainer)
+test_metrics = trainer.test(model, data)
+with open(str(OUTPUT_PATH) + ".json", "w") as outfile:
+    json.dump(test_metrics[0], outfile)
 result = trainer.predict(model, data)
 flattened_result = []
 if not os.path.exists(OUTPUT_PATH):

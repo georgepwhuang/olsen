@@ -1,3 +1,4 @@
+import os
 import random
 from abc import ABC, abstractmethod
 from typing import List, Sized
@@ -240,11 +241,11 @@ class DocumentInferenceDataset(SizedDataset):
 
 class UnlabelledDocumentDataset(SizedDataset):
     def __init__(
-            self, filename: str, batch_size: int,
+            self, dirname: str, batch_size: int,
             window_size: int, dilation_gap: int, transformer: str
     ):
         super().__init__()
-        self.filename = filename
+        self.dirname = dirname
         self.batch_size = batch_size
         self.overlap = int((window_size - 1) / 2.0) * (dilation_gap + 1)
         self.tokenizer = SentenceTokenizer(transformer)
@@ -255,25 +256,24 @@ class UnlabelledDocumentDataset(SizedDataset):
         backtran: List[str] = []
         origblocks: List[TextBlock] = []
         backblocks: List[TextBlock] = []
-        with open(self.filename) as fp:
-            for line in fp:
-                if bool(line.strip()):
-                    orig, back = line.split("###")
-                    orig = orig.strip()
-                    back = back.strip()
-                    original.append(orig)
-                    backtran.append(back)
-                else:
-                    origblock, backblock = self.create_block(original, backtran)
-                    origblocks.extend(origblock)
-                    backblocks.extend(backblock)
-                    original = []
-                    backtran = []
-        if len(original) > 0 and len(backtran) > 0:
-            origblock, backblock = self.create_block(original, backtran)
-            origblocks.extend(origblock)
-            backblocks.extend(backblock)
-        return original, backtran
+        for file in os.listdir(self.dirname):
+            with open(os.path.join(self.dirname, file)) as fp:
+                for line in fp:
+                    if bool(line.strip()):
+                        try:
+                            orig, back = line.split("###")
+                            orig = orig.strip()
+                            back = back.strip()
+                            original.append(orig)
+                            backtran.append(back)
+                        except ValueError:
+                            pass
+                origblock, backblock = self.create_block(original, backtran)
+                origblocks.extend(origblock)
+                backblocks.extend(backblock)
+                original = []
+                backtran = []
+        return origblocks, backblocks
 
     def create_block(self, original: List[str], backtran: List[str]) -> (List[TextBlock], List[TextBlock]):
         counter = 0

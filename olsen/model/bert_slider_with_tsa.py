@@ -20,7 +20,7 @@ class BertSliderWithTSA(BertSlider):
         super().setup(stage)
         # https://github.com/PyTorchLightning/pytorch-lightning/issues/5449
         if stage == 'fit':
-            if self.trainer.max_steps:
+            if self.trainer.max_steps != -1:
                 self.total_steps = self.trainer.max_steps
             else:
                 limit_batches = self.trainer.limit_train_batches

@@ -5,7 +5,7 @@ from sacremoses import MosesTokenizer, MosesDetokenizer
 
 from olsen.constants import DATASET_DIR, BIN_DIR
 
-device = 0
+device = int(input("CUDA Device: "))
 source = DATASET_DIR.joinpath("unlabelled", "original")
 target = DATASET_DIR.joinpath("unlabelled", "translated")
 input_files = os.listdir(source)
@@ -19,7 +19,7 @@ for file in input_files:
         original_lines = f.readlines()
         normalized = [normalizer.tokenize(line, return_str=True) for line in original_lines]
         bpe_processed = bpe.apply(normalized)
-        tokenized = [line.split() for line in bpe_processed]
+        tokenized = [line.split()[:128] for line in bpe_processed]
         translated = en_de.translate_batch(tokenized, max_batch_size=128, beam_size=1,
                                            sampling_topk=0, sampling_temperature=0.8)
         translation = [translated[i].hypotheses[0] for i in range(len(translated))]
@@ -33,5 +33,3 @@ for file in input_files:
     with open(target.joinpath(file), 'w') as f:
         f.write(result)
         f.write("\n")
-del en_de
-del de_en
